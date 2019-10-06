@@ -60,10 +60,6 @@ logging.getLogger().addHandler(consoleHandler)
 logf = logging.getLogger()
 
 
-def get_code(parent, itemprop, itemtype, default):
-    return get_name(parent, itemprop, itemtype, default, childitemprop="iataCode")
-
-
 def parsedate_simple(s):
     if s == "":
         return ""
@@ -71,55 +67,47 @@ def parsedate_simple(s):
     return dateutil.parser.parse(s)
 
 
+def traverse(scm, path):
+    if "properties" in scm and type(scm["properties"]) == dict:
+        return traverse(scm["properties"], path)
+    if len(path) == 1:
+        return scm.get(path[0], "")
+    return traverse(scm.get(path[0], {}), path[1:])
+
+
 def process_schema(mail):
     reservations = []
     for t in mail.text_html:
-        for scm in extruct.extract(t)["microdata"]:
-            if scm.get("type", "") == "http://schema.org/EmailMessage":
+        schemas = extruct.extract(t)
+        for scm in schemas["microdata"]:
+            if scm["type"] == "http://schema.org/EmailMessage":
                 pass
-            elif scm.get("type", "") == "http://schema.org/FlightReservation":
-                properties = scm.get("properties", {})
+            elif scm["type"] == "http://schema.org/FlightReservation":
                 reservations.append(
                     {
                         "type": "flight",
-                        "reservation_number": properties.get("reservationNumber", ""),
-                        "flight_number": properties.get("reservationFor", {})
-                        .get("properties", {})
-                        .get("airline", {})
-                        .get("properties", {})
-                        .get("iataCode", "")
-                        + properties.get("reservationFor", {})
-                        .get("properties", {})
-                        .get("flightNumber", ""),
-                        "departure_airport_code": properties.get("reservationFor", {})
-                        .get("properties", {})
-                        .get("departureAirport", {})
-                        .get("properties", {})
-                        .get("iataCode", {}),
-                        "arrival_airport_code": properties.get("reservationFor", {})
-                        .get("properties", {})
-                        .get("arrivalAirport", {})
-                        .get("properties", {})
-                        .get("iataCode", {}),
-                        "departure_airport_name": properties.get("reservationFor", {})
-                        .get("properties", {})
-                        .get("departureAirport", {})
-                        .get("properties", {})
-                        .get("name", {}),
-                        "arrival_airport_name": properties.get("reservationFor", {})
-                        .get("properties", {})
-                        .get("arrivalAirport", {})
-                        .get("properties", {})
-                        .get("name", {}),
+                        "reservation_number": traverse(scm, ["reservationNumber"]),
+                        "flight_number": traverse(
+                            scm, ["reservationFor", "airline", "iataCode"]
+                        )
+                        + traverse(scm, ["reservationFor", "flightNumber"]),
+                        "departure_airport_code": traverse(
+                            scm, ["reservationFor", "departureAirport", "iataCode"]
+                        ),
+                        "arrival_airport_code": traverse(
+                            scm, ["reservationFor", "arrivalAirport", "iataCode"]
+                        ),
+                        "departure_airport_name": traverse(
+                            scm, ["reservationFor", "departureAirport", "name"]
+                        ),
+                        "arrival_airport_name": traverse(
+                            scm, ["reservationFor", "arrivalAirport", "name"]
+                        ),
                         "departure_time": parsedate_simple(
-                            properties.get("reservationFor", {})
-                            .get("properties", {})
-                            .get("departureTime", "")
+                            traverse(scm, ["reservationFor", "departureTime"])
                         ),
                         "arrival_time": parsedate_simple(
-                            properties.get("reservationFor", {})
-                            .get("properties", {})
-                            .get("arrivalTime", "")
+                            traverse(scm, ["reservationFor", "arrivalTime"])
                         ),
                     }
                 )
@@ -128,39 +116,39 @@ def process_schema(mail):
                     {
                         "type": "notification",
                         "message": "Unknown schema type, {}.  Is it interesting?".format(
-                            scm.get("type", "NONE")
+                            traverse(scm, "type")
                         ),
                     }
                 )
-        for scm in extruct.extract(t)["json-ld"]:
+        for scm in schemas["json-ld"]:
             if scm.get("@type", "") == "EmailMessage":
                 pass
             elif scm.get("@type", "") == "LodgingReservation":
                 reservations.append(
                     {
                         "type": "lodging",
-                        "reservation_number": scm.get("reservationNumber", ""),
-                        "lodging_name": scm.get("reservationFor", {}).get("name", ""),
-                        "lodging_address": scm.get("reservationFor", {})
-                        .get("address", {})
-                        .get("streetAddress", ""),
-                        "check_in": parsedate_simple(scm.get("checkinDate", "")),
-                        "check_out": parsedate_simple(scm.get("checkoutDate", "")),
+                        "reservation_number": traverse(scm, ["reservationNumber"]),
+                        "lodging_name": traverse(scm, ["reservationFor", "name"]),
+                        "lodging_address": traverse(
+                            scm, ["reservationFor", "address", "streetAddress"]
+                        ),
+                        "check_in": parsedate_simple(
+                            traverse(scm, ["checkinDate"])
+                        ),
+                        "check_out": parsedate_simple(traverse(scm, ["checkoutDate"])),
                     }
                 )
             elif scm.get("@type", "") == "FoodEstablishmentReservation":
                 reservations.append(
                     {
                         "type": "restaurant",
-                        "reservation_number": scm.get("reservationNumber", ""),
-                        "restaurant_name": scm.get("reservationFor", {}).get(
-                            "name", ""
+                        "reservation_number": traverse(scm, ["reservationNumber"]),
+                        "restaurant_name": traverse(scm, ["reservationFor", "name"]),
+                        "restaurant_address": traverse(
+                            scm, ["reservationFor", "address", "streetAddress"]
                         ),
-                        "restaurant_address": scm.get("reservationFor", {})
-                        .get("address", {})
-                        .get("streetAddress", ""),
-                        "time": parsedate_simple(scm.get("startTime", "")),
-                        "party": scm.get("partySize", ""),
+                        "time": parsedate_simple(traverse(scm, ["startTime"])),
+                        "party": traverse(scm, ["partySize"]),
                     }
                 )
             else:
@@ -168,7 +156,7 @@ def process_schema(mail):
                     {
                         "type": "notification",
                         "message": "Unknown schema type, {}.  Is it interesting?".format(
-                            scm.get("@type", "NONE")
+                            traverse(scm, "@type")
                         ),
                     }
                 )
