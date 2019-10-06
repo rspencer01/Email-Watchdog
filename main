@@ -27,6 +27,7 @@ import caldav
 from Notification import Notification
 from FlightEvent import FlightEvent
 from LodgingEvent import LodgingEvent
+from RestaurantEvent import RestaurantEvent
 
 config = yaml.full_load(open("config.yaml"))
 
@@ -118,7 +119,7 @@ def process_schema(mail):
                 reservations.append(
                     Notification(
                         "Unknown schema type, {}.  Is it interesting?".format(
-                            traverse(scm, "type")
+                            scm.get("type", "NONE")
                         )
                     )
                 )
@@ -268,35 +269,6 @@ def get_response():
             return updates
 
 
-def create_ical(event):
-    cal = Calendar()
-    ev = Event()
-    ev.add(
-        "uid",
-        "robert_spencer_bot_"
-        + hashlib.sha256(str(event.__dict__).encode("utf-8")).hexdigest()[:16],
-    )
-    if type(event) == FlightEvent:
-        ev.add("dtstart", event.departure_time)
-        ev.add("dtend", event.arrival_time)
-        fc = event.departure_airport_code or event.departure_airport_name
-        tc = event.arrival_airport_code or event.arrival_airport_name
-        ev.add("summary", "Flight {} -> {}".format(fc, tc))
-    elif type(event) == LodgingEvent:
-        ev.add("dtstart", event.check_in)
-        ev.add("dtend", event.check_out)
-        ev.add("summary", "Staying at {}".format(event.lodging_name))
-        ev.add("location", event.lodging_address)
-    elif type(event) == RestaurantEvent:
-        ev.add("dtstart", event.time)
-        ev.add("dtend", event.time + datetime.timedelta(hours=1))
-        ev.add("summary", "Booking for {}".format(event.restaurant_name))
-        ev.add("location", event.restaurant_address)
-
-    cal.add_component(ev)
-    return cal.to_ical()
-
-
 menu = [
     [telegram.InlineKeyboardButton(text="Yes, please.", callback_data="yes")],
     [telegram.InlineKeyboardButton(text="No, thank you.", callback_data="no")],
@@ -306,7 +278,6 @@ for r in res:
     t = get_pretty_text(r)
     if t is None:
         continue
-
     message_id = bot.sendMessage(
         chat_id=config["telegram"]["chat_id"],
         text=t,
@@ -321,6 +292,6 @@ for r in res:
         reply_markup=telegram.InlineKeyboardMarkup([[]]),
     )
     if response.callback_query.data == "yes":
-        personal_calendar.add_event(create_ical(r))
+        personal_calendar.add_event(r.ical())
     else:
         pass

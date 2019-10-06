@@ -1,3 +1,7 @@
+from icalendar import Calendar, Event
+import hashlib
+
+
 class FlightEvent:
     def __init__(
         self,
@@ -18,3 +22,19 @@ class FlightEvent:
         self.arrival_airport_name = arrival_airport_name
         self.departure_time = departure_time
         self.arrival_time = arrival_time
+
+    def ical(self):
+        cal = Calendar()
+        ev = Event()
+        ev.add("dtstart", self.departure_time)
+        ev.add("dtend", self.arrival_time)
+        fc = self.departure_airport_code or self.departure_airport_name
+        tc = self.arrival_airport_code or self.arrival_airport_name
+        ev.add("summary", "Flight {} -> {}".format(fc, tc))
+        ev.add(
+            "uid",
+            "robert_spencer_bot_"
+            + hashlib.sha256(str(self.__dict__).encode("utf-8")).hexdigest()[:16],
+        )
+        cal.add_component(ev)
+        return cal.to_ical()
