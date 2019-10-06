@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+
+import sys
+import imaplib
+import hashlib
+import datetime
+import email
+import mailparser
+import logging
+import json
+import yaml
+import extruct
+
+import dateutil.parser
+import dateparser
+
+import argparse
+import telegram
+import time
+
+from tzlocal import get_localzone
+from bs4 import BeautifulSoup
+
+from icalendar import Calendar, Event
+import caldav
+
+config = yaml.full_load(open("config.yaml"))
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--inbox-only", action="store_true")
+
+args = parser.parse_args()
+
+client = caldav.DAVClient(
+    "https://{username}:{password}@{url}".format(**config["calendars"][0])
+)
+principal = client.principal()
+calendars = principal.calendars()
+personal_calendar = [i for i in calendars if i.name == config["calendars"][0]["name"]][
+    0
+]
+
+previous_dates = {}
+
+try:
+    check_since = datetime.datetime.strptime(
+        open("last").read().strip(), "%d-%m-%Y %H:%M:%S"
+    )
+except:
+    check_since = datetime.datetime.now() - datetime.timedelta(days=1000)
+open("last", "w").write(datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"))
+
+
+logging.basicConfig(filename="emailparser.log", level=logging.DEBUG)
+logFormatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s: %(message)s")
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+consoleHandler.setLevel(logging.INFO)
+logging.getLogger().addHandler(consoleHandler)
+logf = logging.getLogger()
+
+
+def get_code(parent, itemprop, itemtype, default):
+    return get_name(parent, itemprop, itemtype, default, childitemprop="iataCode")
+
+
+def parsedate_simple(s):
+    if s == "":
+        return ""
+
+    return dateutil.parser.parse(s)
+
+
+def process_schema(mail):
+    reservations = []
+    for t in mail.text_html:
+        for scm in extruct.extract(t)["microdata"]:
+            if scm.get("type", "") == "http://schema.org/EmailMessage":
+                pass
+            elif scm.get("type", "") == "http://schema.org/FlightReservation":
+                properties = scm.get("properties", {})
+                reservations.append(
+                    {
+                        "type": "flight",
+                        "reservation_number": properties.get("reservationNumber", ""),
+                        "flight_number": properties.get("reservationFor", {})
+                        .get("properties", {})
+                        .get("airline", {})
+                        .get("properties", {})
+                        .get("iataCode", "")
+                        + properties.get("reservationFor", {})
+                        .get("properties", {})
+                        .get("flightNumber", ""),
+                        "departure_airport_code": properties.get("reservationFor", {})
+                        .get("properties", {})
+                        .get("departureAirport", {})
+                        .get("properties", {})
+                        .get("iataCode", {}),
+                        "arrival_airport_code": properties.get("reservationFor", {})
+                        .get("properties", {})
+                        .get("arrivalAirport", {})
+                        .get("properties", {})
+                        .get("iataCode", {}),
+                        "departure_airport_name": properties.get("reservationFor", {})
+                        .get("properties", {})
+                        .get("departureAirport", {})
+                        .get("properties", {})
+                        .get("name", {}),
+                        "arrival_airport_name": properties.get("reservationFor", {})
+                        .get("properties", {})
+                        .get("arrivalAirport", {})
+                        .get("properties", {})
+                        .get("name", {}),
+                        "departure_time": parsedate_simple(
+                            properties.get("reservationFor", {})
+                            .get("properties", {})
+                            .get("departureTime", "")
+                        ),
+                        "arrival_time": parsedate_simple(
+                            properties.get("reservationFor", {})
+                            .get("properties", {})
+                            .get("arrivalTime", "")
+                        ),
+                    }
+                )
+            else:
+                reservations.append(
+                    {
+                        "type": "notification",
+                        "message": "Unknown schema type, {}.  Is it interesting?".format(
+                            scm.get("type", "NONE")
+                        ),
+                    }
+                )
+        for scm in extruct.extract(t)["json-ld"]:
+            if scm.get("@type", "") == "EmailMessage":
+                pass
+            elif scm.get("@type", "") == "LodgingReservation":
+                reservations.append(
+                    {
+                        "type": "lodging",
+                        "reservation_number": scm.get("reservationNumber", ""),
+                        "lodging_name": scm.get("reservationFor", {}).get("name", ""),
+                        "lodging_address": scm.get("reservationFor", {})
+                        .get("address", {})
+                        .get("streetAddress", ""),
+                        "check_in": parsedate_simple(scm.get("checkinDate", "")),
+                        "check_out": parsedate_simple(scm.get("checkoutDate", "")),
+                    }
+                )
+            elif scm.get("@type", "") == "FoodEstablishmentReservation":
+                reservations.append(
+                    {
+                        "type": "restaurant",
+                        "reservation_number": scm.get("reservationNumber", ""),
+                        "restaurant_name": scm.get("reservationFor", {}).get(
+                            "name", ""
+                        ),
+                        "restaurant_address": scm.get("reservationFor", {})
+                        .get("address", {})
+                        .get("streetAddress", ""),
+                        "time": parsedate_simple(scm.get("startTime", "")),
+                        "party": scm.get("partySize", ""),
+                    }
+                )
+            else:
+                reservations.append(
+                    {
+                        "type": "notification",
+                        "message": "Unknown schema type, {}.  Is it interesting?".format(
+                            scm.get("@type", "NONE")
+                        ),
+                    }
+                )
+    return reservations
+
+
+def process_mail(mail):
+    reservations = []
+    if "schema.org" in mail.body:
+        logf.info(
+            'Parsing schema in email {} "{}"'.format(
+                mail.date, mail.subject[:50] + (mail.subject[50:] and "...")
+            )
+        )
+        reservations += process_schema(mail)
+    return reservations
+
+
+bot = telegram.Bot(token=config["telegram"]["token"])
+
+res = []
+for email_account in config["email_accounts"]:
+    with imaplib.IMAP4_SSL(email_account["server"]) as M:
+        M.login(email_account["username"], email_account["password"])
+        if args.inbox_only:
+            mailboxes = ["INBOX"]
+        else:
+            r, mailboxes = M.list()
+            if r != "OK":
+                logf.error("No mailboxes")
+                exit(1)
+            mailboxes = [mb.decode("utf-8").split(' "/" ')[1] for mb in mailboxes]
+        logf.info("Checking mailboxes {}".format(mailboxes))
+        for mailbox in mailboxes:
+            logf.info("Checking mailbox {}".format(mailbox))
+            resp, _ = M.select(mailbox, readonly=True)
+            if resp != "OK":
+                logf.warn(
+                    "Could not select mailbox %s in account %s",
+                    mailbox,
+                    email_account["name"],
+                )
+                continue
+            r, data = M.search(
+                None, '(SINCE "{}")'.format(check_since.strftime("%d-%b-%Y"))
+            )
+            for message_uid in data[0].decode("utf-8").split():
+                r, data = M.fetch(message_uid, "(RFC822)")
+                try:
+                    em = mailparser.parse_from_bytes(data[0][1])
+                except:
+                    continue
+                res += process_mail(em)
+
+
+def get_pretty_text(event):
+    if event["type"] == "notification":
+        return event["message"]
+
+    elif event["type"] == "flight":
+        return """Would you like me to add the following *flight* to your calendar?
+**Reservation Number:** {reservation_number}
+**From:** {frm}
+**To:** {to}
+**On:** {departure_time:%d %B %Y}
+""".format(
+            frm=event["departure_airport_name"]
+            if event["departure_airport_name"]
+            else event["departure_airport_code"],
+            to=event["arrival_airport_name"]
+            if event["arrival_airport_name"]
+            else event["arrival_airport_code"],
+            **event
+        )
+
+    elif event["type"] == "lodging":
+        return """Would you like me to add the following *lodging reservation* to your calendar?
+**Reservation Number:** {reservation_number}
+**At:** {lodging_name}
+**From:** {check_in:%d %B %Y}
+**To:** {check_out:%d %B %Y}
+""".format(
+            **event
+        )
+
+    elif event["type"] == "restaurant":
+        return """Would you like me to add the following *restaurant* to your calendar?
+**Reservation Number:** {reservation_number}
+**For:** {restaurant_name}
+**At:** {time:%d %B %Y %H:%M}
+""".format(
+            **event
+        )
+
+    return None
+
+
+def get_response():
+    updates = bot.getUpdates(allowed_updates=["callback_query"])
+    if updates != []:
+        next_id = updates[-1].update_id + 1
+    else:
+        next_id = None
+    while True:
+        try:
+            updates = bot.getUpdates(
+                offset=next_id, timeout=10, allowed_updates=["callback_query"]
+            )
+        except telegram.error.TimedOut:
+            continue
+        if updates != []:
+            return updates
+
+
+def create_ical(event):
+    cal = Calendar()
+    ev = Event()
+    ev.add(
+        "uid",
+        "robert_spencer_bot_"
+        + hashlib.sha256(str(event).encode("utf-8")).hexdigest()[:16],
+    )
+    if event["type"] == "flight":
+        ev.add("dtstart", event["departure_time"])
+        ev.add("dtend", event["arrival_time"])
+        fc = event["departure_airport_code"] or event["departure_airport_name"]
+        tc = event["arrival_airport_code"] or event["arrival_airport_name"]
+        ev.add("summary", "Flight {} -> {}".format(fc, tc))
+    elif event["type"] == "lodging":
+        ev.add("dtstart", event["check_in"])
+        ev.add("dtend", event["check_out"])
+        ev.add("summary", "Staying at {}".format(event["lodging_name"]))
+        ev.add("location", event["lodging_address"])
+    elif event["type"] == "restaurant":
+        ev.add("dtstart", event["time"])
+        ev.add("dtend", event["time"] + datetime.timedelta(hours=1))
+        ev.add("summary", "Booking for {}".format(event["restaurant_name"]))
+        ev.add("location", event["restaurant_address"])
+
+    cal.add_component(ev)
+    return cal.to_ical()
+
+
+menu = [
+    [telegram.InlineKeyboardButton(text="Yes, please.", callback_data="yes")],
+    [telegram.InlineKeyboardButton(text="No, thank you.", callback_data="no")],
+]
+reply_markup = telegram.InlineKeyboardMarkup(menu)
+for r in res:
+    t = get_pretty_text(r)
+    if t is None:
+        continue
+
+    message_id = bot.sendMessage(
+        chat_id=config["telegram"]["chat_id"],
+        text=t,
+        reply_markup=reply_markup,
+        parse_mode=telegram.ParseMode.MARKDOWN,
+    ).message_id
+    response = get_response()[-1]
+    bot.answerCallbackQuery(response.callback_query.id)
+    bot.editMessageReplyMarkup(
+        chat_id=config["telegram"]["chat_id"],
+        message_id=message_id,
+        reply_markup=telegram.InlineKeyboardMarkup([[]]),
+    )
+    if response.callback_query.data == "yes":
+        personal_calendar.add_event(create_ical(r))
+    else:
+        pass
