@@ -24,6 +24,10 @@ from bs4 import BeautifulSoup
 from icalendar import Calendar, Event
 import caldav
 
+from Notification import Notification
+from FlightEvent import FlightEvent
+from LodgingEvent import LodgingEvent
+
 config = yaml.full_load(open("config.yaml"))
 
 parser = argparse.ArgumentParser()
@@ -84,81 +88,74 @@ def process_schema(mail):
                 pass
             elif scm["type"] == "http://schema.org/FlightReservation":
                 reservations.append(
-                    {
-                        "type": "flight",
-                        "reservation_number": traverse(scm, ["reservationNumber"]),
-                        "flight_number": traverse(
+                    FlightEvent(
+                        reservation_number=traverse(scm, ["reservationNumber"]),
+                        flight_number=traverse(
                             scm, ["reservationFor", "airline", "iataCode"]
                         )
                         + traverse(scm, ["reservationFor", "flightNumber"]),
-                        "departure_airport_code": traverse(
+                        departure_airport_code=traverse(
                             scm, ["reservationFor", "departureAirport", "iataCode"]
                         ),
-                        "arrival_airport_code": traverse(
+                        arrival_airport_code=traverse(
                             scm, ["reservationFor", "arrivalAirport", "iataCode"]
                         ),
-                        "departure_airport_name": traverse(
+                        departure_airport_name=traverse(
                             scm, ["reservationFor", "departureAirport", "name"]
                         ),
-                        "arrival_airport_name": traverse(
+                        arrival_airport_name=traverse(
                             scm, ["reservationFor", "arrivalAirport", "name"]
                         ),
-                        "departure_time": parsedate_simple(
+                        departure_time=parsedate_simple(
                             traverse(scm, ["reservationFor", "departureTime"])
                         ),
-                        "arrival_time": parsedate_simple(
+                        arrival_time=parsedate_simple(
                             traverse(scm, ["reservationFor", "arrivalTime"])
                         ),
-                    }
+                    )
                 )
             else:
                 reservations.append(
-                    {
-                        "type": "notification",
-                        "message": "Unknown schema type, {}.  Is it interesting?".format(
+                    Notification(
+                        "Unknown schema type, {}.  Is it interesting?".format(
                             traverse(scm, "type")
-                        ),
-                    }
+                        )
+                    )
                 )
         for scm in schemas["json-ld"]:
             if scm.get("@type", "") == "EmailMessage":
                 pass
             elif scm.get("@type", "") == "LodgingReservation":
                 reservations.append(
-                    {
-                        "type": "lodging",
-                        "reservation_number": traverse(scm, ["reservationNumber"]),
-                        "lodging_name": traverse(scm, ["reservationFor", "name"]),
-                        "lodging_address": traverse(
+                    LodgingEvent(
+                        reservation_number=traverse(scm, ["reservationNumber"]),
+                        lodging_name=traverse(scm, ["reservationFor", "name"]),
+                        lodging_address=traverse(
                             scm, ["reservationFor", "address", "streetAddress"]
                         ),
-                        "check_in": parsedate_simple(
-                            traverse(scm, ["checkinDate"])
-                        ),
-                        "check_out": parsedate_simple(traverse(scm, ["checkoutDate"])),
-                    }
+                        check_in=parsedate_simple(traverse(scm, ["checkinDate"])),
+                        check_out=parsedate_simple(traverse(scm, ["checkoutDate"])),
+                    )
                 )
             elif scm.get("@type", "") == "FoodEstablishmentReservation":
                 reservations.append(
-                    {
-                        "type": "restaurant",
-                        "reservation_number": traverse(scm, ["reservationNumber"]),
-                        "restaurant_name": traverse(scm, ["reservationFor", "name"]),
-                        "restaurant_address": traverse(
+                    RestaurantEvent(
+                        reservation_number=traverse(scm, ["reservationNumber"]),
+                        restaurant_name=traverse(scm, ["reservationFor", "name"]),
+                        restaurant_address=traverse(
                             scm, ["reservationFor", "address", "streetAddress"]
                         ),
-                        "time": parsedate_simple(traverse(scm, ["startTime"])),
-                        "party": traverse(scm, ["partySize"]),
-                    }
+                        time=parsedate_simple(traverse(scm, ["startTime"])),
+                        party=traverse(scm, ["partySize"]),
+                    )
                 )
             else:
                 reservations.append(
-                    {
-                        "type": "notification",
-                        "message": "Unknown schema type, {}.  Is it interesting?".format(
+                    Notification(
+                        "Unknown schema type, {}.  Is it interesting?".format(
                             traverse(scm, "@type")
-                        ),
-                    }
+                        )
+                    )
                 )
     return reservations
 
@@ -213,42 +210,42 @@ for email_account in config["email_accounts"]:
 
 
 def get_pretty_text(event):
-    if event["type"] == "notification":
-        return event["message"]
+    if type(event) == Notification:
+        return event.message
 
-    elif event["type"] == "flight":
+    elif type(event) == FlightEvent:
         return """Would you like me to add the following *flight* to your calendar?
 **Reservation Number:** {reservation_number}
 **From:** {frm}
 **To:** {to}
 **On:** {departure_time:%d %B %Y}
 """.format(
-            frm=event["departure_airport_name"]
-            if event["departure_airport_name"]
-            else event["departure_airport_code"],
-            to=event["arrival_airport_name"]
-            if event["arrival_airport_name"]
-            else event["arrival_airport_code"],
-            **event
+            frm=event.departure_airport_name
+            if event.departure_airport_name
+            else event.departure_airport_code,
+            to=event.arrival_airport_name
+            if event.arrival_airport_name
+            else event.arrival_airport_code,
+            **event.__dict__
         )
 
-    elif event["type"] == "lodging":
+    elif type(event) == LodgingEvent:
         return """Would you like me to add the following *lodging reservation* to your calendar?
 **Reservation Number:** {reservation_number}
 **At:** {lodging_name}
 **From:** {check_in:%d %B %Y}
 **To:** {check_out:%d %B %Y}
 """.format(
-            **event
+            **event.__dict__
         )
 
-    elif event["type"] == "restaurant":
+    elif type(event) == RestaurantEvent:
         return """Would you like me to add the following *restaurant* to your calendar?
 **Reservation Number:** {reservation_number}
 **For:** {restaurant_name}
 **At:** {time:%d %B %Y %H:%M}
 """.format(
-            **event
+            **event.__dict__
         )
 
     return None
@@ -277,24 +274,24 @@ def create_ical(event):
     ev.add(
         "uid",
         "robert_spencer_bot_"
-        + hashlib.sha256(str(event).encode("utf-8")).hexdigest()[:16],
+        + hashlib.sha256(str(event.__dict__).encode("utf-8")).hexdigest()[:16],
     )
-    if event["type"] == "flight":
-        ev.add("dtstart", event["departure_time"])
-        ev.add("dtend", event["arrival_time"])
-        fc = event["departure_airport_code"] or event["departure_airport_name"]
-        tc = event["arrival_airport_code"] or event["arrival_airport_name"]
+    if type(event) == FlightEvent:
+        ev.add("dtstart", event.departure_time)
+        ev.add("dtend", event.arrival_time)
+        fc = event.departure_airport_code or event.departure_airport_name
+        tc = event.arrival_airport_code or event.arrival_airport_name
         ev.add("summary", "Flight {} -> {}".format(fc, tc))
-    elif event["type"] == "lodging":
-        ev.add("dtstart", event["check_in"])
-        ev.add("dtend", event["check_out"])
-        ev.add("summary", "Staying at {}".format(event["lodging_name"]))
-        ev.add("location", event["lodging_address"])
-    elif event["type"] == "restaurant":
-        ev.add("dtstart", event["time"])
-        ev.add("dtend", event["time"] + datetime.timedelta(hours=1))
-        ev.add("summary", "Booking for {}".format(event["restaurant_name"]))
-        ev.add("location", event["restaurant_address"])
+    elif type(event) == LodgingEvent:
+        ev.add("dtstart", event.check_in)
+        ev.add("dtend", event.check_out)
+        ev.add("summary", "Staying at {}".format(event.lodging_name))
+        ev.add("location", event.lodging_address)
+    elif type(event) == RestaurantEvent:
+        ev.add("dtstart", event.time)
+        ev.add("dtend", event.time + datetime.timedelta(hours=1))
+        ev.add("summary", "Booking for {}".format(event.restaurant_name))
+        ev.add("location", event.restaurant_address)
 
     cal.add_component(ev)
     return cal.to_ical()
