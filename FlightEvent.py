@@ -38,3 +38,19 @@ class FlightEvent:
         )
         cal.add_component(ev)
         return cal.to_ical()
+
+    def telegram(self):
+        return """Would you like me to add the following *flight* to your calendar?
+**Reservation Number:** {reservation_number}
+**From:** {frm}
+**To:** {to}
+**On:** {departure_time:%d %B %Y}
+""".format(
+            frm=self.departure_airport_name
+            if self.departure_airport_name
+            else self.departure_airport_code,
+            to=self.arrival_airport_name
+            if self.arrival_airport_name
+            else self.arrival_airport_code,
+            **self.__dict__
+        )

@@ -210,48 +210,6 @@ for email_account in config["email_accounts"]:
                 res += process_mail(em)
 
 
-def get_pretty_text(event):
-    if type(event) == Notification:
-        return event.message
-
-    elif type(event) == FlightEvent:
-        return """Would you like me to add the following *flight* to your calendar?
-**Reservation Number:** {reservation_number}
-**From:** {frm}
-**To:** {to}
-**On:** {departure_time:%d %B %Y}
-""".format(
-            frm=event.departure_airport_name
-            if event.departure_airport_name
-            else event.departure_airport_code,
-            to=event.arrival_airport_name
-            if event.arrival_airport_name
-            else event.arrival_airport_code,
-            **event.__dict__
-        )
-
-    elif type(event) == LodgingEvent:
-        return """Would you like me to add the following *lodging reservation* to your calendar?
-**Reservation Number:** {reservation_number}
-**At:** {lodging_name}
-**From:** {check_in:%d %B %Y}
-**To:** {check_out:%d %B %Y}
-""".format(
-            **event.__dict__
-        )
-
-    elif type(event) == RestaurantEvent:
-        return """Would you like me to add the following *restaurant* to your calendar?
-**Reservation Number:** {reservation_number}
-**For:** {restaurant_name}
-**At:** {time:%d %B %Y %H:%M}
-""".format(
-            **event.__dict__
-        )
-
-    return None
-
-
 def get_response():
     updates = bot.getUpdates(allowed_updates=["callback_query"])
     if updates != []:
@@ -275,7 +233,7 @@ menu = [
 ]
 reply_markup = telegram.InlineKeyboardMarkup(menu)
 for r in res:
-    t = get_pretty_text(r)
+    t = r.telegram()
     if t is None:
         continue
     message_id = bot.sendMessage(

@@ -26,3 +26,13 @@ class LodgingEvent:
         )
         cal.add_component(ev)
         return cal.to_ical()
+
+    def telegram(self):
+        return """Would you like me to add the following *lodging reservation* to your calendar?
+**Reservation Number:** {reservation_number}
+**At:** {lodging_name}
+**From:** {check_in:%d %B %Y}
+**To:** {check_out:%d %B %Y}
+""".format(
+            **self.__dict__
+        )

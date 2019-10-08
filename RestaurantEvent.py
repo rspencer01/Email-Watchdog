@@ -27,3 +27,12 @@ class RestaurantEvent:
         )
         cal.add_component(ev)
         return cal.to_ical()
+
+    def telegram(self):
+        return """Would you like me to add the following *restaurant* to your calendar?
+**Reservation Number:** {reservation_number}
+**For:** {restaurant_name}
+**At:** {time:%d %B %Y %H:%M}
+""".format(
+            **self.__dict__
+        )
