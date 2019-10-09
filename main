@@ -58,11 +58,11 @@ except:
 open("last", "w").write(datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"))
 
 
-logging.basicConfig(filename="emailparser.log", level=logging.DEBUG)
+logging.basicConfig(filename="emailparser.log", level=logging.INFO)
 logFormatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s: %(message)s")
 consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)
-consoleHandler.setLevel(logging.INFO)
+consoleHandler.setLevel(logging.WARN)
 logging.getLogger().addHandler(consoleHandler)
 logf = logging.getLogger()
 
