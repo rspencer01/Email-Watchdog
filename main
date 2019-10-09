@@ -56,6 +56,10 @@ try:
 except:
     check_since = datetime.datetime.now() - datetime.timedelta(days=1000)
 open("last", "w").write(datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"))
+try:
+    seen = set(map(lambda x: x.strip(), open("seen").readlines()))
+except:
+    seen = set()
 
 
 logging.basicConfig(filename="emailparser.log", level=logging.INFO)
@@ -244,6 +248,10 @@ for email_account in config["email_accounts"]:
                 None, '(SINCE "{}")'.format(check_since.strftime("%d-%b-%Y"))
             )
             for message_uid in data[0].decode("utf-8").split():
+                cd = "{}/{}/{}".format(email_account["name"], mailbox, message_uid)
+                if cd in seen:
+                    continue
+                open("seen", "a").write("\n" + cd)
                 r, data = M.fetch(message_uid, "(RFC822)")
                 try:
                     em = mailparser.parse_from_bytes(data[0][1])
