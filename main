@@ -10,6 +10,7 @@ import logging
 import json
 import yaml
 import extruct
+import nltk
 
 import dateutil.parser
 import dateparser
@@ -28,6 +29,7 @@ from Notification import Notification
 from FlightEvent import FlightEvent
 from LodgingEvent import LodgingEvent
 from RestaurantEvent import RestaurantEvent
+from Appointment import Appointment
 
 config = yaml.full_load(open("config.yaml"))
 
@@ -161,6 +163,45 @@ def process_schema(mail):
     return reservations
 
 
+def process_nlp(mail):
+    def sanitize(txt):
+        return txt.replace("\n", " ").replace("\r", " ").replace("-", "")
+
+    text = (
+        " ".join(map(sanitize, mail.text_plain))
+        or BeautifulSoup("".join(mail.text_html)).text
+    )
+    sentences = nltk.sent_tokenize(text)
+    stemmer = nltk.PorterStemmer()
+    time = None
+    for sentence in sentences:
+        good = False
+        for word in nltk.word_tokenize(sentence):
+            stm = stemmer.stem(word)
+            if stm in ["meet", "appoint"]:
+                good = True
+                break
+        # We pick the first response so as not to get things in the reply
+        if good:
+            try:
+                time = dateutil.parser.parse(sentence, fuzzy=True)
+                break
+            except ValueError:
+                continue
+    if time is not None:
+        is_personal = "robert" in text.lower() or "spencer" in text.lower()
+        return [
+            Appointment(
+                "Meet with {}".format(mail.from_[0][0])
+                if is_personal
+                else mail.subject,
+                time,
+                "",
+            )
+        ]
+    return []
+
+
 def process_mail(mail):
     reservations = []
     if "schema.org" in mail.body:
@@ -170,6 +211,7 @@ def process_mail(mail):
             )
         )
         reservations += process_schema(mail)
+    reservations += process_nlp(mail)
     return reservations
 
 
