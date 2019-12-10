@@ -4,6 +4,7 @@ from events import Event
 
 
 class FlightEvent(Event):
+
     def __init__(
         self,
         reservation_number,
@@ -42,11 +43,7 @@ class FlightEvent(Event):
 **To:** {to}
 **On:** {departure_time:%d %B %Y}
 """.format(
-            frm=self.departure_airport_name
-            if self.departure_airport_name
-            else self.departure_airport_code,
-            to=self.arrival_airport_name
-            if self.arrival_airport_name
-            else self.arrival_airport_code,
+            frm=self.departure_airport_name if self.departure_airport_name else self.departure_airport_code,
+            to=self.arrival_airport_name if self.arrival_airport_name else self.arrival_airport_code,
             **self.__dict__
         )

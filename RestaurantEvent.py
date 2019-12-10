@@ -2,6 +2,7 @@ from events import Event
 
 
 class RestaurantEvent:
+
     def __init__(
         self, reservation_number, restaurant_name, restaurant_address, time, party
     ):

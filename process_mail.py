@@ -14,10 +14,13 @@ from RestaurantEvent import RestaurantEvent
 from Appointment import Appointment
 
 
-st = StanfordNERTagger('stanford_ner/english.all.3class.distsim.crf.ser.gz',
-                       'stanford_ner/stanford-ner.jar')
+st = StanfordNERTagger(
+    "stanford_ner/english.all.3class.distsim.crf.ser.gz",
+    "stanford_ner/stanford-ner.jar",
+)
 
 logf = logging.getLogger()
+
 
 def parsedate_simple(s):
     if s == "":
@@ -29,8 +32,10 @@ def parsedate_simple(s):
 def traverse(scm, path):
     if "properties" in scm and type(scm["properties"]) == dict:
         return traverse(scm["properties"], path)
+
     if len(path) == 1:
         return scm.get(path[0], "")
+
     return traverse(scm.get(path[0], {}), path[1:])
 
 
@@ -116,8 +121,9 @@ def process_schema(mail):
 
 
 def process_nlp(mail):
+
     def sanitize(txt):
-        return txt.replace("\r", "").replace("\n\n"," .\n").replace("\n", " ")
+        return txt.replace("\r", "").replace("\n\n", " .\n").replace("\n", " ")
 
     text = (
         " ".join(map(sanitize, mail.text_plain))
@@ -128,27 +134,32 @@ def process_nlp(mail):
     time = None
     for sentence in sentences:
         # Ignore things that look like the next email in the list (and later)
-        if 'original' in sentence.lower() and 'sent' in sentence.lower():
+        if "original" in sentence.lower() and "sent" in sentence.lower():
             break
-        time = dateparser.search.search_dates(sentence[:-1].replace('.',':'), languages=['en'])
+
+        time = dateparser.search.search_dates(
+            sentence[:-1].replace(".", ":"), languages=["en"]
+        )
         print(sentence)
         print(st.tag(nltk.word_tokenize(sentence)))
         for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentence))):
-          if hasattr(chunk, 'label'):
-            print(chunk.label(), ' '.join(c[0] for c in chunk.leaves()))
+            if hasattr(chunk, "label"):
+                print(chunk.label(), " ".join(c[0] for c in chunk.leaves()))
         if time:
-          time = time[0][1]
-          break
+            time = time[0][1]
+            break
+
     if time is not None:
         is_personal = "robert" in text.lower() or "spencer" in text.lower()
         return [
             Appointment(
-                summary="Meet with {}".format(mail.from_[0][0])
-                if is_personal
-                else mail.subject,
+                summary="Meet with {}".format(
+                    mail.from_[0][0]
+                ) if is_personal else mail.subject,
                 start=time,
             )
         ]
+
     return []
 
 

@@ -2,6 +2,7 @@ from events import Event
 
 
 class LodgingEvent(Event):
+
     def __init__(
         self, reservation_number, lodging_name, lodging_address, check_in, check_out
     ):

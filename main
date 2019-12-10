@@ -69,7 +69,6 @@ logging.getLogger().addHandler(consoleHandler)
 logf = logging.getLogger()
 
 
-
 bot = telegram.Bot(token=config["telegram"]["token"])
 
 res = []
