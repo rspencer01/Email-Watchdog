@@ -1,33 +1,21 @@
 #!/usr/bin/env python3
 
-import sys
-import imaplib
-import hashlib
-import datetime
-import email
-import mailparser
-import logging
-import json
-import yaml
-import extruct
+"""Runs the email daemon."""
 
 import argparse
-import telegram
-import time
+import datetime
+import imaplib
+import logging
 
-from tzlocal import get_localzone
-from bs4 import BeautifulSoup
-
-from icalendar import Calendar, Event
 import caldav
 
-from Notification import Notification
-from FlightEvent import FlightEvent
-from LodgingEvent import LodgingEvent
-from RestaurantEvent import RestaurantEvent
-from Appointment import Appointment
+import mailparser
 
-from process_mail import *
+from process_mail import process_mail
+
+import telegram
+
+import yaml
 
 config = yaml.full_load(open("config.yaml"))
 
@@ -51,12 +39,12 @@ try:
     check_since = datetime.datetime.strptime(
         open("last").read().strip(), "%d-%m-%Y %H:%M:%S"
     )
-except:
+except Exception:
     check_since = datetime.datetime.now() - datetime.timedelta(days=1000)
 open("last", "w").write(datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S"))
 try:
     seen = set(map(lambda x: x.strip(), open("seen").readlines()))
-except:
+except Exception:
     seen = set()
 
 
@@ -105,12 +93,13 @@ for email_account in config["email_accounts"]:
                 r, data = M.fetch(message_uid, "(RFC822)")
                 try:
                     em = mailparser.parse_from_bytes(data[0][1])
-                except:
+                except Exception:
                     continue
                 res += process_mail(em)
 
 
-def get_response():
+def get_response() -> list:
+    """Wait for a response to a telegram message and retrieve it."""
     updates = bot.getUpdates(allowed_updates=["callback_query"])
     if updates != []:
         next_id = updates[-1].update_id + 1

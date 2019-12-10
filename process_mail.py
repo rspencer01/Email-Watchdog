@@ -1,18 +1,28 @@
 import logging
-import mailparser
-import sys, os
-import nltk
-import dateutil.parser
-import dateparser.search
+import sys
 
-from nltk.tag.stanford import StanfordNERTagger
-
-from Notification import Notification
-from FlightEvent import FlightEvent
-from LodgingEvent import LodgingEvent
-from RestaurantEvent import RestaurantEvent
 from Appointment import Appointment
 
+from FlightEvent import FlightEvent
+
+from LodgingEvent import LodgingEvent
+
+from Notification import Notification
+
+from RestaurantEvent import RestaurantEvent
+
+from bs import BeautifulSoup
+
+import dateparser.search
+
+import dateutil.parser
+
+import extruct
+
+import mailparser
+
+import nltk
+from nltk.tag.stanford import StanfordNERTagger
 
 st = StanfordNERTagger(
     "stanford_ner/english.all.3class.distsim.crf.ser.gz",
@@ -67,8 +77,7 @@ def process_schema(mail):
                             scm, ["reservationFor", "arrivalAirport", "name"]
                         ),
                         departure_time=parsedate_simple(
-                            traverse(scm, ["reservationFor", "departureTime"])
-                        ),
+                            traverse(scm, ["reservationFor", "departureTime"])),
                         arrival_time=parsedate_simple(
                             traverse(scm, ["reservationFor", "arrivalTime"])
                         ),
@@ -130,7 +139,6 @@ def process_nlp(mail):
         or BeautifulSoup("".join(mail.text_html)).text
     )
     sentences = nltk.sent_tokenize(text)
-    stemmer = nltk.PorterStemmer()
     time = None
     for sentence in sentences:
         # Ignore things that look like the next email in the list (and later)
