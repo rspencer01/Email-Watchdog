@@ -34,3 +34,6 @@ class Appointment:
 """.format(
             **self.__dict__
         )
+
+    def __repr__(self):
+      return "<Appointment {}>".format(self.__dict__)
