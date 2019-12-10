@@ -1,8 +1,7 @@
-from icalendar import Calendar, Event
-import hashlib
+from events import Event
 
 
-class LodgingEvent:
+class LodgingEvent(Event):
     def __init__(
         self, reservation_number, lodging_name, lodging_address, check_in, check_out
     ):
@@ -12,27 +11,22 @@ class LodgingEvent:
         self.check_in = check_in
         self.check_out = check_out
 
-    def ical(self):
-        cal = Calendar()
-        ev = Event()
-        ev.add("dtstart", self.check_in)
-        ev.add("dtend", self.check_out)
-        ev.add("summary", "Staying at {}".format(self.lodging_name))
-        ev.add("location", self.lodging_address)
-        ev.add(
-            "uid",
-            "robert_spencer_bot_"
-            + hashlib.sha256(str(self.__dict__).encode("utf-8")).hexdigest()[:16],
-        )
-        cal.add_component(ev)
-        return cal.to_ical()
+    def _get_summary(self):
+        return f"Stay at {self.lodging_name}"
+
+    def _get_start(self):
+        return self.check_in
+
+    def _get_end(self):
+        return self.check_out
+
+    def _get_location(self):
+        return self.lodging_address
 
     def telegram(self):
-        return """Would you like me to add the following *lodging reservation* to your calendar?
-**Reservation Number:** {reservation_number}
-**At:** {lodging_name}
-**From:** {check_in:%d %B %Y}
-**To:** {check_out:%d %B %Y}
-""".format(
-            **self.__dict__
-        )
+        return f"""Would you like me to add the following *lodging reservation* to your calendar?
+**Reservation Number:** {self.reservation_number}
+**At:** {self.lodging_name}
+**From:** {self.check_in:%d %B %Y}
+**To:** {self.check_out:%d %B %Y}
+"""

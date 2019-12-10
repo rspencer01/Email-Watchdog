@@ -143,11 +143,10 @@ def process_nlp(mail):
         is_personal = "robert" in text.lower() or "spencer" in text.lower()
         return [
             Appointment(
-                "Meet with {}".format(mail.from_[0][0])
+                summary="Meet with {}".format(mail.from_[0][0])
                 if is_personal
                 else mail.subject,
-                time,
-                "",
+                start=time,
             )
         ]
     return []
