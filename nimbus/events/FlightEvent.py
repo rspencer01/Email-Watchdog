@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from events import Event
+from .Event import Event
 
 
 class FlightEvent(Event):

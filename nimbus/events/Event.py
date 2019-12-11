@@ -10,10 +10,10 @@ import icalendar
 class Event(NamedTuple):
     """An event in a user's life."""
 
-    start: datetime
-    end: datetime = None
     summary: str
     location: str
+    start: datetime
+    end: datetime = None
     all_day: bool = False
 
     def to_ical(self) -> str:

@@ -11,7 +11,7 @@ import caldav
 
 import mailparser
 
-from process_mail import process_mail
+from nimbus.process_mail import process_mail
 
 import telegram
 

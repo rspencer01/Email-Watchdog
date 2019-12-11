@@ -1,4 +1,4 @@
-from events import Event
+from .Event import Event
 
 
 class Appointment(Event):

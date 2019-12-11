@@ -1,17 +1,8 @@
 import logging
 import sys
 
-from Appointment import Appointment
 
-from FlightEvent import FlightEvent
-
-from LodgingEvent import LodgingEvent
-
-from Notification import Notification
-
-from RestaurantEvent import RestaurantEvent
-
-from bs import BeautifulSoup
+from bs4 import BeautifulSoup
 
 import dateparser.search
 
@@ -23,6 +14,10 @@ import mailparser
 
 import nltk
 from nltk.tag.stanford import StanfordNERTagger
+
+from .Notification import Notification
+from .events import Appointment, FlightEvent, LodgingEvent, RestaurantEvent
+
 
 st = StanfordNERTagger(
     "stanford_ner/english.all.3class.distsim.crf.ser.gz",
@@ -165,6 +160,7 @@ def process_nlp(mail):
                     mail.from_[0][0]
                 ) if is_personal else mail.subject,
                 start=time,
+                location=None,
             )
         ]
 
