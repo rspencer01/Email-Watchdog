@@ -72,7 +72,8 @@ def process_schema(mail):
                             scm, ["reservationFor", "arrivalAirport", "name"]
                         ),
                         departure_time=parsedate_simple(
-                            traverse(scm, ["reservationFor", "departureTime"])),
+                            traverse(scm, ["reservationFor", "departureTime"])
+                        ),
                         arrival_time=parsedate_simple(
                             traverse(scm, ["reservationFor", "arrivalTime"])
                         ),
@@ -125,7 +126,6 @@ def process_schema(mail):
 
 
 def process_nlp(mail):
-
     def sanitize(txt):
         return txt.replace("\r", "").replace("\n\n", " .\n").replace("\n", " ")
 
@@ -134,31 +134,33 @@ def process_nlp(mail):
         or BeautifulSoup("".join(mail.text_html)).text
     )
     sentences = nltk.sent_tokenize(text)
+    stemmer = nltk.PorterStemmer()
     time = None
     for sentence in sentences:
         # Ignore things that look like the next email in the list (and later)
         if "original" in sentence.lower() and "sent" in sentence.lower():
             break
-
-        time = dateparser.search.search_dates(
-            sentence[:-1].replace(".", ":"), languages=["en"]
-        )
-        print(sentence)
-        print(st.tag(nltk.word_tokenize(sentence)))
-        for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentence))):
-            if hasattr(chunk, "label"):
-                print(chunk.label(), " ".join(c[0] for c in chunk.leaves()))
-        if time:
-            time = time[0][1]
-            break
+        good = False
+        for word in nltk.word_tokenize(sentence):
+            stm = stemmer.stem(word)
+            if stm in ["meet", "appoint", "see"]:
+                good = True
+                break
+        # We pick the first response so as not to get things in the reply
+        if good:
+            time = dateparser.search.search_dates(
+                sentence[:-1].replace(".", ":"), languages=["en"]
+            )
+            if time:
+                time = time[0][1]
 
     if time is not None:
         is_personal = "robert" in text.lower() or "spencer" in text.lower()
         return [
             Appointment(
-                summary="Meet with {}".format(
-                    mail.from_[0][0]
-                ) if is_personal else mail.subject,
+                summary="Meet with {}".format(mail.from_[0][0])
+                if is_personal
+                else mail.subject,
                 start=time,
                 location=None,
             )

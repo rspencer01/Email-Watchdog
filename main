@@ -11,9 +11,8 @@ import caldav
 
 import mailparser
 
+from nimbus.notifications import add_notification, get_response, update
 from nimbus.process_mail import process_mail
-
-import telegram
 
 import yaml
 
@@ -48,16 +47,14 @@ except Exception:
     seen = set()
 
 
-logging.basicConfig(filename="emailparser.log", level=logging.INFO)
+logging.basicConfig(filename="emailparser.log", level=logging.WARN)
 logFormatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s: %(message)s")
 consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)
-consoleHandler.setLevel(logging.WARN)
+consoleHandler.setLevel(logging.INFO)
 logging.getLogger().addHandler(consoleHandler)
 logf = logging.getLogger()
 
-
-bot = telegram.Bot(token=config["telegram"]["token"])
 
 res = []
 for email_account in config["email_accounts"]:
@@ -98,47 +95,12 @@ for email_account in config["email_accounts"]:
                 res += process_mail(em)
 
 
-def get_response() -> list:
-    """Wait for a response to a telegram message and retrieve it."""
-    updates = bot.getUpdates(allowed_updates=["callback_query"])
-    if updates != []:
-        next_id = updates[-1].update_id + 1
-    else:
-        next_id = None
-    while True:
-        try:
-            updates = bot.getUpdates(
-                offset=next_id, timeout=10, allowed_updates=["callback_query"]
-            )
-        except telegram.error.TimedOut:
-            continue
-        if updates != []:
-            return updates
-
-
-menu = [
-    [telegram.InlineKeyboardButton(text="Yes, please.", callback_data="yes")],
-    [telegram.InlineKeyboardButton(text="No, thank you.", callback_data="no")],
-]
-reply_markup = telegram.InlineKeyboardMarkup(menu)
 for r in res:
     t = r.telegram()
     if t is None:
         continue
-    message_id = bot.sendMessage(
-        chat_id=config["telegram"]["chat_id"],
-        text=t,
-        reply_markup=reply_markup,
-        parse_mode=telegram.ParseMode.MARKDOWN,
-    ).message_id
-    response = get_response()[-1]
-    bot.answerCallbackQuery(response.callback_query.id)
-    bot.editMessageReplyMarkup(
-        chat_id=config["telegram"]["chat_id"],
-        message_id=message_id,
-        reply_markup=telegram.InlineKeyboardMarkup([[]]),
-    )
-    if response.callback_query.data == "yes":
+    notification_id = add_notification(t, response_required=True)
+    while get_response(notification_id) is None:
+        update()
+    if get_response(notification_id) == "yes":
         personal_calendar.add_event(r.ical())
-    else:
-        pass
