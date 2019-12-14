@@ -18,6 +18,9 @@ travel.add_argument("action", choices=["current_position", "set_off"])
 calendar = subparsers.add_parser("calendar")
 calendar.add_argument("action", choices=["next"])
 
+notifications = subparsers.add_parser("notifications")
+notifications.add_argument("action", choices=["update"])
+
 args = parser.parse_args()
 
 if args.submodule == "persistent":
@@ -42,3 +45,9 @@ if args.submodule == "calendar":
 
     if args.action == "next":
         print(yaml.dump(nimbus.calendars.get_next_event()))
+
+if args.submodule == "notifications":
+    import nimbus.notifications
+
+    if args.action == "update":
+        nimbus.notifications.update()
