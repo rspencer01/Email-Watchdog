@@ -1,18 +1,23 @@
 """Sends reminders when you need to go to an event."""
-from datetime import datetime, timedelta
 
 import logging
+from datetime import datetime, timedelta
 
 from geopy import geocoders
 
 import openrouteservice
 
+import yaml
+
 from .calendars import get_next_event
+from .notifications import add_notification
 from .persistent.last import Last
 from .travel import current_position
-from .notifications import add_notification
 
-def get_set_off_reminder():
+config = yaml.full_load(open("config.yaml"))
+
+
+def get_set_off_reminder() -> None:
     """Send reminder if one is due."""
     position = current_position()
     logging.warn("Current position %s", position)
@@ -26,7 +31,7 @@ def get_set_off_reminder():
     )
     logging.warn("Destination %s %s", destination.latitude, destination.longitude)
     route_client = openrouteservice.Client(
-        key="5b3ce3597851110001cf62481822a34b7cd746cb99919105c63745db"
+        key=config['tracking']['orskey']
     )
     travel_time = route_client.directions(
         (
@@ -45,6 +50,7 @@ def get_set_off_reminder():
     last_run_time = datetime.strptime(last_run.value, "%Y-%m-%d %H:%M:%S")
 
     warn_time = event["start"].replace(tzinfo=None) - timedelta(seconds=travel_time)
+    logging.warn("Warn time %s", warn_time)
     immediate_message = "To get to **{}** for **{}** by **{}** you will need to leave now.".format(
         event["location"], event["title"], event["start"].strftime("%H:%M")
     )
