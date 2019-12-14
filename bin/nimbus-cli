@@ -1,0 +1,44 @@
+#!/usr/bin/env python
+"""The command line entry point to the nimbus systems."""
+
+import argparse
+
+import yaml
+
+
+parser = argparse.ArgumentParser()
+subparsers = parser.add_subparsers(dest="submodule")
+
+persistent = subparsers.add_parser("persistent")
+persistent.add_argument("action", choices=["init"])
+
+travel = subparsers.add_parser("travel")
+travel.add_argument("action", choices=["current_position", "set_off"])
+
+calendar = subparsers.add_parser("calendar")
+calendar.add_argument("action", choices=["next"])
+
+args = parser.parse_args()
+
+if args.submodule == "persistent":
+    if args.action == "init":
+        import nimbus.persistent
+        from nimbus.persistent.notification import Notification
+        from nimbus.persistent.last import Last
+
+        nimbus.persistent.db.create_tables([Last, Notification])
+
+if args.submodule == "travel":
+    import nimbus.travel
+    import nimbus.set_off_reminders
+
+    if args.action == "current_position":
+        print(yaml.dump(nimbus.travel.current_position()))
+    if args.action == "set_off":
+        nimbus.set_off_reminders.get_set_off_reminder()
+
+if args.submodule == "calendar":
+    import nimbus.calendars
+
+    if args.action == "next":
+        print(yaml.dump(nimbus.calendars.get_next_event()))
