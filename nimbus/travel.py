@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from geopy import geocoders
+from geopy import exc, geocoders
 
 import requests
 
@@ -25,9 +25,14 @@ def current_position() -> None:
         return None
 
     geocoder = geocoders.Photon()
+    try:
+        location_name = geocoder.reverse("{lat}, {lon}".format(**points[-1])).address
+    except exc.GeocoderTimedOut:
+        location_name = None
+
     return {
         "lat": points[-1]["lat"],
         "lon": points[-1]["lon"],
         "stationary": points[-1]["speed"] < 0.2,
-        "location": geocoder.reverse("{lat}, {lon}".format(**points[-1])).address,
+        "location": location_name,
     }

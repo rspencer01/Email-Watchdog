@@ -3,6 +3,7 @@
 At the moment all push notifications are through telegram.
 """
 import datetime
+import io
 
 import telegram
 
@@ -34,12 +35,15 @@ def query_menu(notification_id) -> str:
 EMPTY_MENU = [[]]
 
 
-def add_notification(message: str, response_required: bool = False) -> int:
+def add_notification(
+    message: str, response_required: bool = False, photo: bytes = None
+) -> int:
     """Add a notification to the queue."""
     notification = Notification.create(
         message=message,
         response_required=response_required,
         created=datetime.datetime.now(),
+        photo=photo,
     )
     notification.save()
     return notification.id
@@ -109,12 +113,20 @@ def send_new_notifications() -> None:
             else EMPTY_MENU
         )
         reply_markup = telegram.InlineKeyboardMarkup(menu)
-        notification.telegram_id = bot.sendMessage(
-            chat_id=config["telegram"]["chat_id"],
-            text=notification.message,
-            reply_markup=reply_markup,
-            parse_mode=telegram.ParseMode.MARKDOWN,
-        ).message_id
+        if not notification.photo is None:
+            notification.telegram_id = bot.sendPhoto(
+                chat_id=config["telegram"]["chat_id"],
+                caption=notification.message,
+                parse_mode=telegram.ParseMode.MARKDOWN,
+                photo=io.BytesIO(notification.photo),
+            )
+        else:
+            notification.telegram_id = bot.sendMessage(
+                chat_id=config["telegram"]["chat_id"],
+                text=notification.message,
+                reply_markup=reply_markup,
+                parse_mode=telegram.ParseMode.MARKDOWN,
+            ).message_id
         notification.posed = True
         notification.save()
 
