@@ -4,4 +4,4 @@ class Notification:
         self.message = message
 
     def telegram(self):
-        return message
+        return self.message
