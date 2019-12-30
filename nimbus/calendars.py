@@ -11,8 +11,8 @@ import yaml
 config = yaml.full_load(open("config.yaml"))
 
 
-def get_next_event() -> None:
-    """Find the next event for the user."""
+def get_personal_calendar():
+    """Find the personal calendar for the user."""
     personal_calendar_config = config["calendars"][0]
 
     client = caldav.DAVClient(
@@ -20,9 +20,12 @@ def get_next_event() -> None:
     )
     principal = client.principal()
     calendars = principal.calendars()
-    personal_calendar = [
-        i for i in calendars if i.name == personal_calendar_config["name"]
-    ][0]
+    return [i for i in calendars if i.name == personal_calendar_config["name"]][0]
+
+
+def get_next_event() -> None:
+    """Find the next event for the user."""
+    personal_calendar = get_personal_calendar()
     midnight = datetime.datetime.now().replace(
         hour=0, minute=0, second=0
     ) + datetime.timedelta(days=1)
