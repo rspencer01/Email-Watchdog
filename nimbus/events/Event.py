@@ -34,7 +34,7 @@ class Event(NamedTuple):
         if self._get_location():
             ev.add("location", self._get_location())
         ev.add(
-            "uid", "robert_spencer_bot_" + hashlib.sha256(str(self)).hexdigest()[:16]
+            "uid", "robert_spencer_bot_" + hashlib.sha256(str(self).encode('ascii')).hexdigest()[:16]
         )
         cal.add_component(ev)
         return cal.to_ical()
