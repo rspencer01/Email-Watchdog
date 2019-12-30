@@ -1,7 +1,6 @@
 import logging
 import sys
 
-
 from bs4 import BeautifulSoup
 
 import dateparser.search
@@ -149,7 +148,9 @@ def process_nlp(mail):
         # We pick the first response so as not to get things in the reply
         if good:
             time = dateparser.search.search_dates(
-                sentence[:-1].replace(".", ":"), languages=["en"]
+                sentence[:-1].replace(".", ":"),
+                languages=["en"],
+                settings={"PREFER_DATES_FROM": "future", "RELATIVE_BASE": mail.date},
             )
             if time:
                 time = time[0][1]
