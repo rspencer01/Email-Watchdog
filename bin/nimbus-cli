@@ -6,10 +6,15 @@ import argparse
 import yaml
 
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(
+    "nibus-cli",
+    description="The command line interface to the nimbus suite of utilities.",
+)
 subparsers = parser.add_subparsers(dest="submodule")
 
-persistent = subparsers.add_parser("persistent")
+persistent = subparsers.add_parser(
+    "persistent", description="Utilities to initialise and query the persistent store."
+)
 persistent.add_argument("action", choices=["init"])
 
 travel = subparsers.add_parser("travel")
@@ -19,6 +24,13 @@ calendar = subparsers.add_parser("calendar")
 calendar.add_argument("action", choices=["next"])
 
 notifications = subparsers.add_parser("notifications")
+notifications.add_argument("action", choices=["update"])
+
+notifications = subparsers.add_parser("email")
+notifications.add_argument("action", choices=["since"])
+notifications.add_argument("when")
+
+notifications = subparsers.add_parser("email_invites")
 notifications.add_argument("action", choices=["update"])
 
 args = parser.parse_args()
@@ -51,3 +63,22 @@ if args.submodule == "notifications":
 
     if args.action == "update":
         nimbus.notifications.update()
+
+if args.submodule == "email":
+    import nimbus.emails
+    import dateparser
+
+    if args.action == "since":
+        for email in nimbus.emails.get_emails_since(dateparser.parse(args.when)):
+            print("When:   {}".format(email.date))
+            print("To:   {}".format(email.to))
+            print("From: {}".format(email.from_))
+            #            print("Body:\n{}".format(email.body))
+            print("Message:\n{}".format(nimbus.emails.extract_message(email)))
+            print("Salutation:\n{}".format(nimbus.emails.extract_salutation(email)))
+            print()
+
+if args.submodule == "email_invites":
+    import nimbus.event_invitations
+
+    nimbus.event_invitations.update()
