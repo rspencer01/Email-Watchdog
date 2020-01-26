@@ -2,9 +2,13 @@
 """The command line entry point to the nimbus systems."""
 
 import argparse
+import datetime
+
+from pytablewriter import MarkdownTableWriter
 
 import yaml
 
+config = yaml.full_load(open("config.yaml"))
 
 parser = argparse.ArgumentParser(
     "nibus-cli",
@@ -18,7 +22,7 @@ persistent = subparsers.add_parser(
 persistent.add_argument("action", choices=["init"])
 
 travel = subparsers.add_parser("travel")
-travel.add_argument("action", choices=["current_position", "set_off"])
+travel.add_argument("action", choices=["current_position", "set_off", "week"])
 
 calendar = subparsers.add_parser("calendar")
 calendar.add_argument("action", choices=["next"])
@@ -51,6 +55,45 @@ if args.submodule == "travel":
         print(yaml.dump(nimbus.travel.current_position()))
     if args.action == "set_off":
         nimbus.set_off_reminders.get_set_off_reminder()
+    if args.action == "week":
+        import gpx_trip
+        import nimbus.notifications
+
+        locations = {}
+        for single_date in (
+            datetime.datetime.now() - datetime.timedelta(n) for n in range(1, 8)
+        ):
+            info = gpx_trip.extract_info(
+                open(
+                    single_date.strftime(config["tracking"]["historic_data_file"])
+                ).read(),
+                predefined_stops=config["places"],
+            )
+            for stop in info["time_at_stops"]:
+                if info["stops"][stop]["short_name"] not in locations:
+                    locations[info["stops"][stop]["short_name"]] = info[
+                        "time_at_stops"
+                    ][stop]
+                else:
+                    locations[info["stops"][stop]["short_name"]] += info[
+                        "time_at_stops"
+                    ][stop]
+        loc_sorted = sorted(locations.keys(), key=lambda x: locations[x])
+        table = MarkdownTableWriter()
+        table.headers = ["Place", "Time"]
+        table.value_matrix = [
+            [
+                i,
+                "{}:{}".format(
+                    locations[i].days * 24 + int(locations[i].seconds) // 3600,
+                    int(locations[i].seconds) % 3600 // 60,
+                ),
+            ]
+            for i in loc_sorted[:-5:-1]
+        ]
+        nimbus.notifications.add_notification(
+            "Last week's travel:\n\n```" + table.dumps() + "```"
+        )
 
 if args.submodule == "calendar":
     import nimbus.calendars
