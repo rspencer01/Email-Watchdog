@@ -22,7 +22,7 @@ persistent = subparsers.add_parser(
 persistent.add_argument("action", choices=["init"])
 
 travel = subparsers.add_parser("travel")
-travel.add_argument("action", choices=["current_position", "set_off", "week"])
+travel.add_argument("action", choices=["current_position", "set_off", "week", "day"])
 
 calendar = subparsers.add_parser("calendar")
 calendar.add_argument("action", choices=["next"])
@@ -94,6 +94,24 @@ if args.submodule == "travel":
         nimbus.notifications.add_notification(
             "Last week's travel:\n\n```" + table.dumps() + "```"
         )
+    if args.action == "day":
+        import gpx_trip
+        import nimbus.notifications
+
+        info = gpx_trip.extract_info(
+            open(
+                (datetime.datetime.now() - datetime.timedelta(days=2)).strftime(
+                    config["tracking"]["historic_data_file"]
+                )
+            ).read(),
+            predefined_stops=config["places"],
+        )
+        message = "*Trips today*\n"
+        for trip in info["trips"]:
+            from_loc = info["stops"][trip["from"]]
+            to_loc = info["stops"][trip["to"]]
+            message += from_loc["emoji_name"] + "->" + to_loc["emoji_name"] + "\n"
+        nimbus.notifications.add_notification(message)
 
 if args.submodule == "calendar":
     import nimbus.calendars
