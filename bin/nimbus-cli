@@ -4,7 +4,7 @@
 import argparse
 import datetime
 
-from pytablewriter import MarkdownTableWriter
+import HTML
 
 import yaml
 
@@ -58,10 +58,11 @@ if args.submodule == "travel":
     if args.action == "week":
         import gpx_trip
         import nimbus.notifications
+        from nimbus.html_screenshot import BOOTSTRAP_FORMAT, get_screenshot
 
         locations = {}
         for single_date in (
-            datetime.datetime.now() - datetime.timedelta(n) for n in range(1, 8)
+            datetime.datetime.now() - datetime.timedelta(n) for n in range(2, 8)
         ):
             info = gpx_trip.extract_info(
                 open(
@@ -79,24 +80,37 @@ if args.submodule == "travel":
                         "time_at_stops"
                     ][stop]
         loc_sorted = sorted(locations.keys(), key=lambda x: locations[x])
-        table = MarkdownTableWriter()
-        table.headers = ["Place", "Time"]
-        table.value_matrix = [
+        table = HTML.table(
             [
-                i,
-                "{}:{}".format(
-                    locations[i].days * 24 + int(locations[i].seconds) // 3600,
-                    int(locations[i].seconds) % 3600 // 60,
-                ),
-            ]
-            for i in loc_sorted[:-5:-1]
-        ]
+                [
+                    i,
+                    "{}:{}".format(
+                        locations[i].days * 24 + int(locations[i].seconds) // 3600,
+                        int(locations[i].seconds) % 3600 // 60,
+                    ),
+                ]
+                for i in loc_sorted[:-5:-1]
+            ],
+            header_row=["Place", "Time"],
+            style="",
+            cellpadding=None,
+            border="",
+            attribs={"class": "table"},
+        )
+        html = BOOTSTRAP_FORMAT.format(
+            "<h1>Places Visited</h1><h3>{:%Y-%m-%d} to {:%Y-%m-%d}</h3>{}".format(
+                datetime.datetime.now() - datetime.timedelta(days=9),
+                datetime.datetime.now() - datetime.timedelta(days=2),
+                table,
+            )
+        )
         nimbus.notifications.add_notification(
-            "Last week's travel:\n\n```" + table.dumps() + "```"
+            "", photo=get_screenshot(html.encode("utf-8"))
         )
     if args.action == "day":
         import gpx_trip
         import nimbus.notifications
+        from nimbus.html_screenshot import BOOTSTRAP_FORMAT, get_screenshot
 
         info = gpx_trip.extract_info(
             open(
@@ -106,12 +120,24 @@ if args.submodule == "travel":
             ).read(),
             predefined_stops=config["places"],
         )
-        message = "*Trips today*\n"
+        tbl = []
         for trip in info["trips"]:
             from_loc = info["stops"][trip["from"]]
             to_loc = info["stops"][trip["to"]]
-            message += from_loc["emoji_name"] + "->" + to_loc["emoji_name"] + "\n"
-        nimbus.notifications.add_notification(message)
+            tbl.append([trip['start'].strftime("%H:%M"),from_loc["emoji_name"], "->", to_loc["emoji_name"],trip['end'].strftime("%H:%M"),])
+        html = BOOTSTRAP_FORMAT.format(
+            "<h1>Trips today</h1><h3>{:%Y-%m-%d}</h3>{}".format(
+                datetime.datetime.now(),
+                HTML.table(
+                    tbl,
+                    attribs={"class": "table"},
+                    cellpadding=None,
+                    style="",
+                    border="",
+                ),
+            )
+        )
+        nimbus.notifications.add_notification("", photo=get_screenshot(html.encode('utf-8')))
 
 if args.submodule == "calendar":
     import nimbus.calendars
