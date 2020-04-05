@@ -12,16 +12,10 @@ import extruct
 import mailparser
 
 import nltk
-from nltk.tag.stanford import StanfordNERTagger
 
 from .Notification import Notification
 from .events import Appointment, FlightEvent, LodgingEvent, RestaurantEvent
 
-
-st = StanfordNERTagger(
-    "stanford_ner/english.all.3class.distsim.crf.ser.gz",
-    "stanford_ner/stanford-ner.jar",
-)
 
 logf = logging.getLogger()
 
@@ -142,7 +136,7 @@ def process_nlp(mail):
         good = False
         for word in nltk.word_tokenize(sentence):
             stm = stemmer.stem(word)
-            if stm in ["meet", "appoint", "see"]:
+            if stm in ["meet", "appoint", "see", "class", "begin"]:
                 good = True
                 break
         # We pick the first response so as not to get things in the reply
@@ -171,16 +165,14 @@ def process_nlp(mail):
 
 
 def process_mail(mail):
-    reservations = []
     if "schema.org" in mail.body:
         logf.info(
             'Parsing schema in email {} "{}"'.format(
                 mail.date, mail.subject[:50] + (mail.subject[50:] and "...")
             )
         )
-        reservations += process_schema(mail)
-    reservations += process_nlp(mail)
-    return reservations
+        return process_schema(mail)
+    return process_nlp(mail)
 
 
 if __name__ == "__main__":
