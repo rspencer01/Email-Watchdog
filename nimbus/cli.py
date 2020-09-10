@@ -9,6 +9,7 @@ import yaml
 
 import nimbus.travel
 import nimbus.notifications
+import nimbus.kimai
 
 config = yaml.full_load(open("config.yaml"))
 
@@ -71,6 +72,11 @@ def day(date):
 def notifications():
     """Update the notifications"""
     nimbus.notifications.update()
+
+@click.command()
+def timesheet():
+    """Collate information about timesheet"""
+    nimbus.kimai.today()
 
 
 travel.add_command(current_position)

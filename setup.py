@@ -17,6 +17,7 @@ setup(
         [console_scripts]
         nimbus-travel=nimbus.cli:travel
         nimbus-notifications=nimbus.cli:notifications
+        nimbus-time=nimbus.cli:timesheet
     ''',
     python_requires=">=3.5",
     install_requires=[
